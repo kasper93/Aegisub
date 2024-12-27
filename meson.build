@@ -316,7 +316,9 @@ if get_option('enable_update_checker')
     deps += [libcurl_dep]
 endif
 
-luajit = dependency('luajit', version: '>=2.0.0', required: get_option('system_luajit'))
+luajit = dependency('luajit', version: '>=2.0.0', required: get_option('system_luajit'),
+                    allow_fallback: false,
+                    default_options: ['amalgam=true', 'luajit=false', 'lua52compat=true'])
 if luajit.found() and luajit.type_name() != 'internal'
     luajit_test = cc.run('''#include <lauxlib.h>
 int main(void)
@@ -332,18 +334,26 @@ int main(void)
         if get_option('system_luajit')
             error('System luajit found but not compiled in 5.2 mode')
         else
-            message('System luajit found but not compiled in 5.2 mode; using built-in luajit')
+            message('System luajit found but not compiled in 5.2 mode')
+            luajit = dependency('', required: false)
         endif
     else
         deps += luajit
     endif
-else
-    message('System luajit not found; using built-in luajit')
 endif
 
-if not deps.contains(luajit)
-    deps += subproject('luajit').get_variable('luajit_dep')
+if not luajit.found()
+    message('Using built-in luajit')
+    subproject('luajit') # Initialize subproject to ignore system luajit
+    luajit = dependency('luajit', version: '>=2.0.0',
+                        default_options: ['amalgam=true', 'luajit=false', 'lua52compat=true'])
+    assert(luajit.type_name() == 'internal', 'System luajit used instead of built-in luajit')
 endif
+
+if luajit.type_name() == 'internal'
+    deps += luajit
+endif
+
 deps += subproject('luabins').get_variable('luabins_dep')
 
 dep_gl = dependency('gl', required: false)
